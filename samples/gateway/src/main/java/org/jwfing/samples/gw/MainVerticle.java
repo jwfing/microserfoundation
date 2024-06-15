@@ -15,6 +15,7 @@ import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.CorsHandler;
 import io.vertx.ext.web.handler.LoggerHandler;
+import io.vertx.ext.web.handler.StaticHandler;
 import io.vertx.grpc.client.GrpcClient;
 import io.vertx.grpc.client.GrpcClientRequest;
 import org.jwfing.samples.common.HttpVerticle;
@@ -50,16 +51,18 @@ public class MainVerticle extends HttpVerticle {
     Router router = Router.router(vertx);
     router.get("/ping").handler(this::healthcheck);
     router.get("/metrics").handler(this::outputMetrics);
+    router.route("/static/*").handler(StaticHandler.create("static"));
 
     router.route(API_VERSION_1_1 + "*")
-//            .handler(CorsHandler.create().allowedMethod(HttpMethod.GET).allowedMethod(HttpMethod.POST)
-//            .allowedMethod(HttpMethod.PUT).allowedMethod(HttpMethod.DELETE).allowedMethod(HttpMethod.OPTIONS)
-//            .allowedMethod(HttpMethod.HEAD)
-//            .allowedHeader("Access-Control-Request-Method").allowedHeader("Access-Control-Allow-Credentials")
-//            .allowedHeader("Access-Control-Allow-Origin").allowedHeader("Access-Control-Allow-Headers")
-//            .allowedHeader("Content-Type").allowedHeader("Origin").allowedHeader("Accept"))
-//            .handler(BodyHandler.create().setBodyLimit(4*1024*1024l))
-            .handler(LoggerHandler.create());
+            .handler(CorsHandler.create().allowedMethod(HttpMethod.GET).allowedMethod(HttpMethod.POST)
+                    .allowedMethod(HttpMethod.PUT).allowedMethod(HttpMethod.DELETE).allowedMethod(HttpMethod.OPTIONS)
+                    .allowedMethod(HttpMethod.HEAD)
+                    .allowedHeader("Access-Control-Request-Method").allowedHeader("Access-Control-Allow-Credentials")
+                    .allowedHeader("Access-Control-Allow-Origin").allowedHeader("Access-Control-Allow-Headers")
+                    .allowedHeader("Content-Type").allowedHeader("Origin").allowedHeader("Accept"))
+            .handler(BodyHandler.create().setBodyLimit(4 * 1024 * 1024l))
+            .handler(routingContext -> routingContext.next());
+//            .handler(LoggerHandler.create());
     router.post(API_VERSION_1_1 + "users").handler(this::userSignup);
     router.post(API_VERSION_1_1 + "login").handler(this::userSignin);
     router.get(API_VERSION_1_1 + "users").handler(this::userFind);
@@ -107,12 +110,14 @@ public class MainVerticle extends HttpVerticle {
     String password = requestBody.getString("password", "");
     SocketAddress serverAddr = SocketAddress.inetSocketAddress(8090, "127.0.0.1");
 
+    logger.debug("try to signup with para: " + requestBody);
+
     grpcClient.request(serverAddr, AccountMgrGrpc.getSignupMethod()).compose(request -> {
       request.end(AuthRequest.newBuilder().setName(name).setPassword(password).build());
       return request.response().compose(response -> response.last());
     }).onSuccess(reply -> {
       JsonObject ab = convert2Json(reply.getAccount());
-      System.out.println("Received " + ab.toString());
+      logger.debug("signup Received " + ab.toString());
       ok(context, ab);
     });
   }
@@ -123,12 +128,14 @@ public class MainVerticle extends HttpVerticle {
     String password = requestBody.getString("password", "");
     SocketAddress serverAddr = SocketAddress.inetSocketAddress(8090, "127.0.0.1");
 
+    logger.debug("try to signin with para: " + requestBody);
+
     grpcClient.request(serverAddr, AccountMgrGrpc.getLoginMethod()).compose(request -> {
       request.end(AuthRequest.newBuilder().setName(name).setPassword(password).build());
       return request.response().compose(response -> response.last());
     }).onSuccess(reply -> {
       JsonObject ab = convert2Json(reply.getAccount());
-      System.out.println("Received " + ab.toString());
+      logger.debug("signin Received " + ab.toString());
       ok(context, ab);
     });
   }

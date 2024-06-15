@@ -18,7 +18,7 @@ public class RequestParser {
               .stream()
               .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       body = JsonObject.mapFrom(filteredEntries);
-    } else if (HttpMethod.PUT.equals(httpMethod) || HttpMethod.POST.equals(httpMethod)){
+    } else if (HttpMethod.PUT.equals(httpMethod) || HttpMethod.POST.equals(httpMethod)) {
       try {
         String bodyString = context.getBodyAsString();
         if (StringUtils.isEmpty(bodyString)) {
