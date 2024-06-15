@@ -1,0 +1,78 @@
+<project>
+  <modelVersion>4.0.0</modelVersion>
+ 
+  <parent>
+    <groupId>org.jwfing.samples</groupId>
+    <artifactId>micro-service-samples</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+ 
+  <artifactId>common</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <protoc.gen.grpc>1.64.0</protoc.gen.grpc>
+    <vertx.grpc.version>4.5.8</vertx.grpc.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-grpc</artifactId>
+      <version>${vertx.grpc.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <extensions>
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.4.1.Final</version>
+      </extension>
+    </extensions>
+    <plugins>
+      <plugin>
+        <groupId>org.xolstice.maven.plugins</groupId>
+        <artifactId>protobuf-maven-plugin</artifactId>
+        <version>0.6.1</version>
+        <configuration>
+          <protocArtifact>com.google.protobuf:protoc:3.2.0:exe:${os.detected.classifier}</protocArtifact>
+          <pluginId>grpc-java</pluginId>
+          <pluginArtifact>io.grpc:protoc-gen-grpc-java:${protoc.gen.grpc}:exe:${os.detected.classifier}</pluginArtifact>
+          <protocPlugins>
+            <protocPlugin>
+              <id>vertx-grpc-protoc-plugin</id>
+              <groupId>io.vertx</groupId>
+              <artifactId>vertx-grpc-protoc-plugin</artifactId>
+              <version>${vertx.grpc.version}</version>
+              <mainClass>io.vertx.grpc.protoc.plugin.VertxGrpcGenerator</mainClass>
+            </protocPlugin>
+          </protocPlugins>
+        </configuration>
+        <executions>
+          <execution>
+            <id>compile</id>
+            <configuration>
+              <outputDirectory>${project.basedir}/src/main/java</outputDirectory>
+              <clearOutputDirectory>false</clearOutputDirectory>
+            </configuration>
+            <goals>
+              <goal>compile</goal>
+              <goal>compile-custom</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>test-compile</id>
+            <goals>
+              <goal>test-compile</goal>
+              <goal>test-compile-custom</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

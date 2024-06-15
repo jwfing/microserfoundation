@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.jwfing.samples.proto";
+option java_outer_classname = "AccountProto";
+
+package org.jwfing.samples.proto;
+
+// The greeting service definition.
+service AccountMgr {
+  // Sends a greeting
+  rpc Login (AuthRequest) returns (LoginReply) {}
+  rpc Signup(AuthRequest) returns (SignupReply) {}
+  rpc Find(FindRequest) returns (FindReply) {}
+}
+
+// The request message containing the user's name.
+message AuthRequest {
+  string name = 1;
+  string password = 2;
+}
+
+message AccountBrief {
+  int64 id = 1;
+  string name = 2;
+}
+
+// The response message containing the greetings
+message LoginReply {
+  AccountBrief account = 1;
+}
+
+message SignupReply {
+  AccountBrief account = 1;
+}
+
+message FindRequest {
+  string name = 1;
+}
+
+message FindReply {
+  repeated AccountBrief accounts = 1;
+}
