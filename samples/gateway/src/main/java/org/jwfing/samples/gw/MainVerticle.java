@@ -1,12 +1,27 @@
 package org.jwfing.samples.gw;
 
+import com.google.protobuf.Descriptors;
+import io.grpc.MethodDescriptor;
+import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
+import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.ext.web.handler.CorsHandler;
+import io.vertx.ext.web.handler.LoggerHandler;
+import io.vertx.grpc.client.GrpcClient;
+import io.vertx.grpc.client.GrpcClientRequest;
 import org.jwfing.samples.common.HttpVerticle;
+import org.jwfing.samples.proto.AccountBrief;
+import org.jwfing.samples.proto.AccountMgrGrpc;
+import org.jwfing.samples.proto.AuthRequest;
+import org.jwfing.samples.proto.SignupReply;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.vertx.micrometer.MetricsService;
@@ -17,23 +32,37 @@ import java.util.Date;
 public class MainVerticle extends HttpVerticle {
   private static final Logger logger = LoggerFactory.getLogger(MainVerticle.class);
   private static final SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+  private static final String API_VERSION_1_1 = "/1.1/";
 
   private HttpServer httpServer = null;
+  private GrpcClient grpcClient = null;
   private long serverStartTime = 0l;
   private MetricsService metricsService = null;
 
   @Override
   public void start(Promise<Void> startFuture) throws Exception {
+    metricsService = MetricsService.create(vertx);
+    grpcClient = GrpcClient.client(vertx);
+
     HttpServerOptions httpServerOptions = new HttpServerOptions()
-            .setTcpFastOpen(true).setTcpCork(true).setTcpQuickAck(true)
-            .addWebSocketSubProtocol("lc.protobuf2.1")
-            .addWebSocketSubProtocol("lc.protobuf2.2")
-            .addWebSocketSubProtocol("lc.protobuf2.3")
-            .setReusePort(true);
+            .setTcpFastOpen(true).setTcpCork(true).setTcpQuickAck(true).setReusePort(true);
     httpServer = vertx.createHttpServer(httpServerOptions);
     Router router = Router.router(vertx);
     router.get("/ping").handler(this::healthcheck);
     router.get("/metrics").handler(this::outputMetrics);
+
+    router.route(API_VERSION_1_1 + "*")
+//            .handler(CorsHandler.create().allowedMethod(HttpMethod.GET).allowedMethod(HttpMethod.POST)
+//            .allowedMethod(HttpMethod.PUT).allowedMethod(HttpMethod.DELETE).allowedMethod(HttpMethod.OPTIONS)
+//            .allowedMethod(HttpMethod.HEAD)
+//            .allowedHeader("Access-Control-Request-Method").allowedHeader("Access-Control-Allow-Credentials")
+//            .allowedHeader("Access-Control-Allow-Origin").allowedHeader("Access-Control-Allow-Headers")
+//            .allowedHeader("Content-Type").allowedHeader("Origin").allowedHeader("Accept"))
+//            .handler(BodyHandler.create().setBodyLimit(4*1024*1024l))
+            .handler(LoggerHandler.create());
+    router.post(API_VERSION_1_1 + "users").handler(this::userSignup);
+    router.post(API_VERSION_1_1 + "login").handler(this::userSignin);
+    router.get(API_VERSION_1_1 + "users").handler(this::userFind);
 
     int portNum = 8080;
     httpServer.requestHandler(router).listen(portNum, ar->{
@@ -63,6 +92,50 @@ public class MainVerticle extends HttpVerticle {
 
   private String getDateString(long dateTimeStamp) {
     return dateFormat.format(new Date(dateTimeStamp));
+  }
+
+  private JsonObject convert2Json(AccountBrief ab) {
+    JsonObject result = new JsonObject();
+    result.put("name", ab.getName());
+    result.put("id", ab.getId());
+    return result;
+  }
+
+  private void userSignup(RoutingContext context) {
+    JsonObject requestBody = RequestParser.parse(context);
+    String name = requestBody.getString("name", "");
+    String password = requestBody.getString("password", "");
+    SocketAddress serverAddr = SocketAddress.inetSocketAddress(8090, "127.0.0.1");
+
+    grpcClient.request(serverAddr, AccountMgrGrpc.getSignupMethod()).compose(request -> {
+      request.end(AuthRequest.newBuilder().setName(name).setPassword(password).build());
+      return request.response().compose(response -> response.last());
+    }).onSuccess(reply -> {
+      JsonObject ab = convert2Json(reply.getAccount());
+      System.out.println("Received " + ab.toString());
+      ok(context, ab);
+    });
+  }
+
+  private void userSignin(RoutingContext context) {
+    JsonObject requestBody = RequestParser.parse(context);
+    String name = requestBody.getString("name", "");
+    String password = requestBody.getString("password", "");
+    SocketAddress serverAddr = SocketAddress.inetSocketAddress(8090, "127.0.0.1");
+
+    grpcClient.request(serverAddr, AccountMgrGrpc.getLoginMethod()).compose(request -> {
+      request.end(AuthRequest.newBuilder().setName(name).setPassword(password).build());
+      return request.response().compose(response -> response.last());
+    }).onSuccess(reply -> {
+      JsonObject ab = convert2Json(reply.getAccount());
+      System.out.println("Received " + ab.toString());
+      ok(context, ab);
+    });
+  }
+
+  private void userFind(RoutingContext context) {
+    JsonObject requestBody = RequestParser.parse(context);
+    ok(context, new JsonObject());
   }
 
   private void healthcheck(RoutingContext context) {
