@@ -3,6 +3,7 @@ package org.jwfing.samples.bizserver;
 import io.vertx.core.VertxOptions;
 import io.vertx.micrometer.MicrometerMetricsOptions;
 import io.vertx.micrometer.VertxInfluxDbOptions;
+import io.vertx.tracing.zipkin.ZipkinTracingOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +28,7 @@ public class Launcher extends io.vertx.core.Launcher {
       logger.info("vertx.metrics.options.influx.enabled: false");
     }
     options.setMetricsOptions(metricsOptions);
+    options.setTracingOptions(new ZipkinTracingOptions().setServiceName("account service"));
   }
 
   public static void main(String[] args) {
