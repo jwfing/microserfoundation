@@ -7,7 +7,7 @@
     <version>1.0.0-SNAPSHOT</version>
   </parent>
  
-  <artifactId>api-server</artifactId>
+  <artifactId>account-server</artifactId>
   <version>1.0.0-SNAPSHOT</version>
 
   <properties>
