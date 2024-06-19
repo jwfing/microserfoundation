@@ -7,17 +7,22 @@ import io.vertx.core.Promise;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.SocketAddress;
+import io.vertx.ext.web.Route;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.CorsHandler;
 import io.vertx.ext.web.handler.LoggerHandler;
 import io.vertx.ext.web.handler.StaticHandler;
+import io.vertx.ext.web.validation.builder.ValidationHandlerBuilder;
 import io.vertx.grpc.client.GrpcClient;
 import io.vertx.grpc.client.GrpcClientRequest;
+import io.vertx.json.schema.*;
+import org.jwfing.samples.common.HttpStatus;
 import org.jwfing.samples.common.HttpVerticle;
 import org.jwfing.samples.proto.AccountBrief;
 import org.jwfing.samples.proto.AccountMgrGrpc;
@@ -29,6 +34,11 @@ import io.vertx.micrometer.MetricsService;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+
+import static io.vertx.ext.web.validation.builder.Bodies.json;
+import static io.vertx.ext.web.validation.builder.Parameters.optionalParam;
+import static io.vertx.ext.web.validation.builder.Parameters.param;
+import static io.vertx.json.schema.common.dsl.Schemas.*;
 
 public class MainVerticle extends HttpVerticle {
   private static final Logger logger = LoggerFactory.getLogger(MainVerticle.class);
@@ -53,19 +63,48 @@ public class MainVerticle extends HttpVerticle {
     router.get("/metrics").handler(this::outputMetrics);
     router.route("/static/*").handler(StaticHandler.create("static"));
 
-    router.route(API_VERSION_1_1 + "*")
+    SchemaParser parser = SchemaParser.createDraft7SchemaParser(
+            SchemaRouter.create(vertx, new SchemaRouterOptions())
+    );
+
+    Route apiRoute = router.route(API_VERSION_1_1 + "*");
+    apiRoute.handler(LoggerHandler.create())
             .handler(CorsHandler.create().allowedMethod(HttpMethod.GET).allowedMethod(HttpMethod.POST)
                     .allowedMethod(HttpMethod.PUT).allowedMethod(HttpMethod.DELETE).allowedMethod(HttpMethod.OPTIONS)
                     .allowedMethod(HttpMethod.HEAD)
                     .allowedHeader("Access-Control-Request-Method").allowedHeader("Access-Control-Allow-Credentials")
                     .allowedHeader("Access-Control-Allow-Origin").allowedHeader("Access-Control-Allow-Headers")
                     .allowedHeader("Content-Type").allowedHeader("Origin").allowedHeader("Accept"))
-            .handler(BodyHandler.create().setBodyLimit(4 * 1024 * 1024l))
-            .handler(routingContext -> routingContext.next());
-//            .handler(LoggerHandler.create());
-    router.post(API_VERSION_1_1 + "users").handler(this::userSignup);
-    router.post(API_VERSION_1_1 + "login").handler(this::userSignin);
-    router.get(API_VERSION_1_1 + "users").handler(this::userFind);
+            .handler(BodyHandler.create().setBodyLimit(4 * 1024 * 1024l));
+    apiRoute.failureHandler(failureRoutingContext -> {
+      int statusCode = failureRoutingContext.statusCode();
+      // Status code will be 500 for the RuntimeException
+      // or 403 for the other failure
+      HttpServerResponse response = failureRoutingContext.response();
+      response.setStatusCode(statusCode).end(failureRoutingContext.failure().getMessage());
+    });
+
+    router.post(API_VERSION_1_1 + "users")
+            .handler(ValidationHandlerBuilder.create(parser)
+                    .body(json(objectSchema()
+                            .requiredProperty("name", stringSchema())
+                            .requiredProperty("password", stringSchema())))
+                    .build())
+            .handler(this::userSignup);
+    router.post(API_VERSION_1_1 + "login")
+            .handler(ValidationHandlerBuilder.create(parser)
+                    .body(json(objectSchema()
+                            .requiredProperty("name", stringSchema())
+                            .requiredProperty("password", stringSchema())))
+                    .build())
+            .handler(this::userSignin);
+    router.get(API_VERSION_1_1 + "users")
+            .handler(ValidationHandlerBuilder.create(parser)
+                    .queryParameter(param("name", stringSchema()))
+                    .queryParameter(optionalParam("from", intSchema()))
+                    .queryParameter(optionalParam("to", intSchema()))
+                    .build())
+            .handler(this::userFind);
 
     int portNum = 8080;
     httpServer.requestHandler(router).listen(portNum, ar->{
